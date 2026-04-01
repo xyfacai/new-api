@@ -32,7 +32,6 @@ var paramOverrideKeyAuditPaths = map[string]struct{}{
 	"upstream_model": {},
 	"service_tier":   {},
 	"inference_geo":  {},
-	"speed":          {},
 }
 
 type paramOverrideAuditRecorder struct {
