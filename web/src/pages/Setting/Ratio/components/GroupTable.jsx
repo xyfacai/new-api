@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   Button,
   Input,
@@ -61,63 +61,60 @@ export function serializeGroupTable(rows) {
   };
 }
 
-export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
+export default function GroupTable({
+  groupRatio,
+  userUsableGroups,
+  onChange,
+}) {
   const { t } = useTranslation();
 
   const [rows, setRows] = useState(() =>
     buildRows(groupRatio, userUsableGroups),
   );
 
-  // Use functional setRows to keep updateRow/addRow/removeRow referentially
-  // stable, preventing columns useMemo from rebuilding on every keystroke
-  // which causes the Input cursor to jump to end (cursor reset bug).
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-
-  const emitAndSet = useCallback((updater) => {
-    setRows((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      onChangeRef.current?.(serializeGroupTable(next));
-      return next;
-    });
-  }, []);
+  const emitChange = useCallback(
+    (newRows) => {
+      setRows(newRows);
+      onChange?.(serializeGroupTable(newRows));
+    },
+    [onChange],
+  );
 
   const updateRow = useCallback(
     (id, field, value) => {
-      emitAndSet((prev) =>
-        prev.map((r) => (r._id === id ? { ...r, [field]: value } : r)),
+      const next = rows.map((r) =>
+        r._id === id ? { ...r, [field]: value } : r,
       );
+      emitChange(next);
     },
-    [emitAndSet],
+    [rows, emitChange],
   );
 
   const addRow = useCallback(() => {
-    emitAndSet((prev) => {
-      const existingNames = new Set(prev.map((r) => r.name));
-      let counter = 1;
-      let newName = `group_${counter}`;
-      while (existingNames.has(newName)) {
-        counter++;
-        newName = `group_${counter}`;
-      }
-      return [
-        ...prev,
-        {
-          _id: uid(),
-          name: newName,
-          ratio: 1,
-          selectable: true,
-          description: '',
-        },
-      ];
-    });
-  }, [emitAndSet]);
+    const existingNames = new Set(rows.map((r) => r.name));
+    let counter = 1;
+    let newName = `group_${counter}`;
+    while (existingNames.has(newName)) {
+      counter++;
+      newName = `group_${counter}`;
+    }
+    emitChange([
+      ...rows,
+      {
+        _id: uid(),
+        name: newName,
+        ratio: 1,
+        selectable: true,
+        description: '',
+      },
+    ]);
+  }, [rows, emitChange]);
 
   const removeRow = useCallback(
     (id) => {
-      emitAndSet((prev) => prev.filter((r) => r._id !== id));
+      emitChange(rows.filter((r) => r._id !== id));
     },
-    [emitAndSet],
+    [rows, emitChange],
   );
 
   const groupNames = useMemo(() => rows.map((r) => r.name), [rows]);
@@ -130,11 +127,6 @@ export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
     return new Set(Object.keys(counts).filter((k) => counts[k] > 1));
   }, [groupNames]);
 
-  // Use ref so column render functions always read the latest duplicate set
-  // without adding duplicateNames to columns deps (which would break cursor).
-  const duplicateNamesRef = useRef(duplicateNames);
-  duplicateNamesRef.current = duplicateNames;
-
   const columns = useMemo(
     () => [
       {
@@ -146,9 +138,7 @@ export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
           <Input
             size='small'
             value={record.name}
-            status={
-              duplicateNamesRef.current.has(record.name) ? 'warning' : undefined
-            }
+            status={duplicateNames.has(record.name) ? 'warning' : undefined}
             onChange={(v) => updateRow(record._id, 'name', v)}
           />
         ),
@@ -222,7 +212,7 @@ export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
         ),
       },
     ],
-    [t, updateRow, removeRow],
+    [t, duplicateNames, updateRow, removeRow],
   );
 
   return (
@@ -233,7 +223,9 @@ export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
         rowKey='_id'
         hidePagination
         size='small'
-        empty={<Text type='tertiary'>{t('暂无分组，点击下方按钮添加')}</Text>}
+        empty={
+          <Text type='tertiary'>{t('暂无分组，点击下方按钮添加')}</Text>
+        }
       />
       <div className='mt-3 flex justify-center'>
         <Button icon={<IconPlus />} theme='outline' onClick={addRow}>
@@ -242,8 +234,7 @@ export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
       </div>
       {duplicateNames.size > 0 && (
         <Text type='warning' size='small' className='mt-2 block'>
-          {t('存在重复的分组名称：')}
-          {Array.from(duplicateNames).join(', ')}
+          {t('存在重复的分组名称：')}{Array.from(duplicateNames).join(', ')}
         </Text>
       )}
     </div>
