@@ -39,7 +39,7 @@ param(
     [string]$UpstreamRemote = "upstream",
     [string]$UpstreamBranch = "main",
     [string]$TargetBranch   = "merge/cherry-pick-upstream",
-    [string]$StateFile      = ".cherry-pick-state",
+    [string]$StateFile      = "scripts/.cherry-pick-state",
     [string]$StartCommit    = ""
 )
 
