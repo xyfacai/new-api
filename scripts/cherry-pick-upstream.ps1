@@ -210,16 +210,22 @@ foreach ($sha in $commitList) {
 
     # Merge commits require -m 1 to specify the mainline parent
     if ($isMerge) {
-        git cherry-pick -m 1 $sha 2>&1 | Out-Null
+        $cpOut = (git cherry-pick -m 1 $sha 2>&1) -join "`n"
     } else {
-        git cherry-pick $sha 2>&1 | Out-Null
+        $cpOut = (git cherry-pick $sha 2>&1) -join "`n"
     }
 
     if ($LASTEXITCODE -ne 0) {
 
-        # Check whether this is a conflict or some other failure
-        $conflicted = @(git diff --name-only --diff-filter=U 2>&1 |
-                        Where-Object { $_ -match "\S" })
+        # Always show what git said to help diagnose failures
+        Write-Host $cpOut -ForegroundColor DarkYellow
+
+        # Detect unmerged paths via git status --porcelain.
+        # Unmerged status codes: UU AA DD AU UA DU UD
+        # This covers all conflict types, including those from -m 1 merge picks.
+        $conflicted = @(git status --porcelain 2>&1 |
+                        Where-Object { $_ -match "^(UU|AA|DD|AU|UA|DU|UD)\s" } |
+                        ForEach-Object { $_.Substring(3) })
 
         if ($conflicted.Count -eq 0) {
             # No conflict files - unrecoverable error
@@ -238,15 +244,16 @@ foreach ($sha in $commitList) {
             Write-Host "        [theirs] $f" -ForegroundColor DarkYellow
         }
 
-        # Stage any remaining unmerged paths (e.g. added/deleted conflicts)
+        # Stage any remaining unmerged paths
         git add -A 2>&1 | Out-Null
 
         # Continue cherry-pick without opening an editor
         $env:GIT_EDITOR = "true"
-        git cherry-pick --continue 2>&1 | Out-Null
+        $continueOut = (git cherry-pick --continue 2>&1) -join "`n"
         $env:GIT_EDITOR = ""
 
         if ($LASTEXITCODE -ne 0) {
+            Write-Host $continueOut -ForegroundColor DarkRed
             Write-Fail "cherry-pick --continue failed: $sha"
             git cherry-pick --abort 2>&1 | Out-Null
             Set-Content -Path $stateFilePath -Value $lastGoodCommit -NoNewline
