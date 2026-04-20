@@ -1,37 +1,49 @@
 <#
 .SYNOPSIS
-    从 upstream 拉取新提交并 cherry-pick 到目标分支。
+    Cherry-pick new upstream commits onto the target branch.
 
 .DESCRIPTION
-    读取上次记录的 commit ID，将 upstream 中其后的所有新提交
-    按顺序 cherry-pick 到目标分支，并将最后成功的 commit ID 写回状态文件。
-    首次运行时若无状态文件，会提示手动输入起始 commit ID。
+    Reads the last recorded upstream commit ID from a state file, fetches
+    all newer commits from the upstream remote, and cherry-picks them one
+    by one onto the target branch.  On conflict, the upstream (theirs)
+    version is accepted automatically.  The state file is updated after
+    every successful cherry-pick.
+
+    On first run (no state file) you will be prompted to enter the
+    starting commit ID manually, or pass -StartCommit on the command line.
+
+    IMPORTANT: The starting commit ID must be a commit that exists on the
+    upstream branch (e.g. upstream/main), NOT a locally cherry-picked SHA.
+    Using a local SHA will cause git to think all upstream history is new
+    and will try to cherry-pick thousands of old commits.
 
 .PARAMETER UpstreamRemote
-    上游远程名称，默认 upstream
+    Name of the upstream git remote.  Default: upstream
 
 .PARAMETER UpstreamBranch
-    上游分支名称，默认 main
+    Branch on the upstream remote to pull from.  Default: main
 
 .PARAMETER TargetBranch
-    cherry-pick 目标分支，默认 merge/cherry-pick-upstream
+    Local branch to cherry-pick commits onto.  Default: merge/cherry-pick-upstream
 
 .PARAMETER StateFile
-    保存最后一次 commit ID 的状态文件名（相对仓库根目录）
+    Path (relative to repo root) of the file that stores the last processed
+    upstream commit ID.  Default: scripts/.cherry-pick-state
 
 .PARAMETER StartCommit
-    强制指定起始 commit ID（非空时覆盖状态文件记录）
+    Force a specific starting commit ID (overrides the state file).
+    Must be a commit that is reachable from upstream/<UpstreamBranch>.
 
 .EXAMPLE
-    # 首次运行 - 会提示输入起始 commit
+    # First run - will prompt for the starting upstream commit
     .\scripts\cherry-pick-upstream.ps1
 
 .EXAMPLE
-    # 强制指定起始 commit
-    .\scripts\cherry-pick-upstream.ps1 -StartCommit abc1234
+    # Force a specific starting commit
+    .\scripts\cherry-pick-upstream.ps1 -StartCommit <upstream-sha>
 
 .EXAMPLE
-    # 从 nightly 分支 cherry-pick
+    # Cherry-pick from the nightly branch
     .\scripts\cherry-pick-upstream.ps1 -UpstreamBranch nightly
 #>
 
@@ -45,203 +57,209 @@ param(
 
 $ErrorActionPreference = "Continue"
 
-# ─── 辅助输出函数 ──────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-function Write-Info([string]$msg) {
-    Write-Host "[INFO]  $msg" -ForegroundColor Cyan
-}
-function Write-Ok([string]$msg) {
-    Write-Host "[OK]    $msg" -ForegroundColor Green
-}
-function Write-Warn([string]$msg) {
-    Write-Host "[WARN]  $msg" -ForegroundColor Yellow
-}
-function Write-Fail([string]$msg) {
-    Write-Host "[ERROR] $msg" -ForegroundColor Red
-}
+function Write-Info([string]$msg)  { Write-Host "[INFO]  $msg" -ForegroundColor Cyan }
+function Write-Ok([string]$msg)    { Write-Host "[OK]    $msg" -ForegroundColor Green }
+function Write-Warn([string]$msg)  { Write-Host "[WARN]  $msg" -ForegroundColor Yellow }
+function Write-Fail([string]$msg)  { Write-Host "[ERROR] $msg" -ForegroundColor Red }
 
-# ─── 确认在仓库根目录 ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Locate repo root
+# ---------------------------------------------------------------------------
 
-$repoRoot = (git rev-parse --show-toplevel 2>&1 | Out-String).Trim()
+$repoRoot = (git rev-parse --show-toplevel 2>&1) -join ""
 if ($LASTEXITCODE -ne 0) {
-    Write-Fail "当前目录不在 git 仓库中，请在仓库目录下运行此脚本。"
+    Write-Fail "Not inside a git repository. Please run this script from within the repo."
     exit 1
 }
 Set-Location $repoRoot
 $stateFilePath = Join-Path $repoRoot $StateFile
-Write-Info "仓库根目录: $repoRoot"
+Write-Info "Repo root : $repoRoot"
 
-# ─── 读取 / 确定起始 commit ───────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Resolve the starting commit
+# ---------------------------------------------------------------------------
 
 if ($StartCommit -ne "") {
-    Write-Info "使用命令行指定的起始 commit: $StartCommit"
+    Write-Info "Using commit supplied via -StartCommit: $StartCommit"
     $lastCommit = $StartCommit.Trim()
 }
 elseif (Test-Path $stateFilePath) {
     $lastCommit = (Get-Content $stateFilePath -Raw).Trim()
-    Write-Info "从状态文件读取上次 commit: $lastCommit"
+    Write-Info "Loaded last commit from state file: $lastCommit"
 }
 else {
-    Write-Warn "未找到状态文件 ($StateFile)，首次运行需要手动输入起始 commit ID。"
-    Write-Host "cherry-pick 将从该 commit 的下一个提交开始。" -ForegroundColor Yellow
-    $lastCommit = (Read-Host "请输入起始 commit ID").Trim()
+    Write-Warn "State file not found ($StateFile). First run - please provide the starting commit."
+    Write-Host "Cherry-pick will begin from the commit AFTER the one you enter." -ForegroundColor Yellow
+    $lastCommit = (Read-Host "Enter starting upstream commit ID").Trim()
     if ($lastCommit -eq "") {
-        Write-Fail "未输入 commit ID，退出。"
+        Write-Fail "No commit ID entered. Exiting."
         exit 1
     }
 }
 
-# 校验 commit 是否存在
+# Validate commit exists locally
 $typeResult = (git cat-file -t $lastCommit 2>&1) -join ""
 if ($LASTEXITCODE -ne 0 -or $typeResult.Trim() -ne "commit") {
-    Write-Fail "无效的 commit ID: $lastCommit (git cat-file 返回: $typeResult)"
+    Write-Fail "Invalid commit ID: $lastCommit"
+    Write-Host "  git cat-file returned: $typeResult" -ForegroundColor DarkRed
     exit 1
 }
-Write-Ok "起始 commit 校验通过: $lastCommit"
+Write-Ok "Commit ID validated: $lastCommit"
 
-# ─── fetch upstream ───────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Fetch upstream
+# ---------------------------------------------------------------------------
 
-Write-Info "正在 fetch $UpstreamRemote ..."
+Write-Info "Fetching $UpstreamRemote ..."
 $fetchOut = (git fetch $UpstreamRemote 2>&1) -join "`n"
 if ($LASTEXITCODE -ne 0) {
-    Write-Fail "git fetch $UpstreamRemote 失败: $fetchOut"
+    Write-Fail "git fetch $UpstreamRemote failed: $fetchOut"
     exit 1
 }
 if ($fetchOut) { Write-Host $fetchOut }
 $upstreamRef = "$UpstreamRemote/$UpstreamBranch"
-Write-Ok "fetch 完成，upstream ref: $upstreamRef"
+Write-Ok "Fetch complete. Upstream ref: $upstreamRef"
 
-# ─── 校验起始 commit 必须是 upstream 分支的祖先 ───────────────────────────────
+# ---------------------------------------------------------------------------
+# Verify the starting commit is an ancestor of the upstream ref
 #
-# 关键约束：$lastCommit 必须是 upstream/main 上的原始提交 SHA。
-# 若传入的是本地 cherry-pick 后产生的新 SHA，git 不认为它是 upstream 的祖先，
-# 导致范围变成 upstream 全量历史（包含几年前的提交）。
+# This is the most common mistake: passing a locally cherry-picked SHA
+# instead of the original upstream SHA.  If $lastCommit is not in the
+# upstream graph then "$lastCommit..$upstreamRef" includes ALL upstream
+# history, causing thousands of old commits to be replayed.
+# ---------------------------------------------------------------------------
 
 git merge-base --is-ancestor $lastCommit $upstreamRef 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    Write-Fail "起始 commit [ $lastCommit ] 不是 $upstreamRef 的祖先！"
+    Write-Fail "Starting commit [$lastCommit] is NOT an ancestor of $upstreamRef !"
     Write-Host ""
-    Write-Host "  常见原因：输入的是本地 cherry-pick 后的 commit SHA，" -ForegroundColor Yellow
-    Write-Host "  而不是 upstream 分支上的原始 commit SHA。" -ForegroundColor Yellow
+    Write-Host "  Most likely cause: you provided a locally cherry-picked SHA." -ForegroundColor Yellow
+    Write-Host "  The state file must always contain an UPSTREAM commit SHA." -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "  解决方法：在 upstream 分支上找到对应的原始 commit SHA：" -ForegroundColor Cyan
+    Write-Host "  Find the correct SHA with:" -ForegroundColor Cyan
     Write-Host "    git log --oneline $upstreamRef | head -20" -ForegroundColor Cyan
-    Write-Host "  然后用该 SHA 重新运行：" -ForegroundColor Cyan
+    Write-Host "  Then re-run:" -ForegroundColor Cyan
     Write-Host "    .\scripts\cherry-pick-upstream.ps1 -StartCommit <upstream-sha>" -ForegroundColor Cyan
     exit 1
 }
-Write-Ok "起始 commit 是 $upstreamRef 的合法祖先，范围计算正确。"
+Write-Ok "Starting commit is a valid ancestor of $upstreamRef."
 
-# ─── 获取待 cherry-pick 的 commit 列表 ───────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Build the list of commits to cherry-pick
+# ---------------------------------------------------------------------------
 
 $range = "${lastCommit}..${upstreamRef}"
-Write-Info "计算提交范围: $range"
+Write-Info "Commit range: $range"
 
 $rawLog = (git log --reverse --pretty=format:"%H" $range 2>&1)
 if ($LASTEXITCODE -ne 0) {
-    Write-Fail "获取提交列表失败: $rawLog"
+    Write-Fail "Failed to list commits: $rawLog"
     exit 1
 }
 
 $commitList = @($rawLog | Where-Object { $_ -match "^[0-9a-f]{40}$" })
 
 if ($commitList.Count -eq 0) {
-    Write-Ok "没有新的提交需要 cherry-pick，已是最新。"
+    Write-Ok "Nothing to cherry-pick - already up to date."
     exit 0
 }
 
-Write-Info "共找到 $($commitList.Count) 个新提交，目标分支: $TargetBranch"
+Write-Info "Found $($commitList.Count) new commit(s) to cherry-pick onto $TargetBranch"
 
-# 预览提交列表（最多显示 8 条）
+# Preview (up to 8 lines)
 $previewLines = git log --reverse --oneline $range 2>&1 | Select-Object -First 8
-foreach ($line in $previewLines) {
-    Write-Host "    $line" -ForegroundColor DarkCyan
-}
+foreach ($line in $previewLines) { Write-Host "    $line" -ForegroundColor DarkCyan }
 if ($commitList.Count -gt 8) {
-    Write-Host "    ... 以及另外 $($commitList.Count - 8) 个提交" -ForegroundColor DarkCyan
+    Write-Host "    ... and $($commitList.Count - 8) more" -ForegroundColor DarkCyan
 }
 
-# ─── 切换到目标分支 ───────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Switch to the target branch
+# ---------------------------------------------------------------------------
 
-$currentBranch = (git rev-parse --abbrev-ref HEAD 2>&1 | Out-String).Trim()
-if ($currentBranch -ne $TargetBranch) {
-    Write-Info "切换分支: $currentBranch -> $TargetBranch"
+$currentBranch = (git rev-parse --abbrev-ref HEAD 2>&1) -join ""
+if ($currentBranch.Trim() -ne $TargetBranch) {
+    Write-Info "Switching branch: $currentBranch -> $TargetBranch"
     git checkout $TargetBranch 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Write-Fail "切换到分支 $TargetBranch 失败"
+        Write-Fail "Failed to checkout $TargetBranch"
         exit 1
     }
 }
-Write-Ok "当前分支: $TargetBranch"
+Write-Ok "On branch: $TargetBranch"
 
-# ─── 逐个 cherry-pick ────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Cherry-pick loop
+# ---------------------------------------------------------------------------
 
 $successCount   = 0
 $lastGoodCommit = $lastCommit
 
 foreach ($sha in $commitList) {
-    $subject = (git log -1 --pretty=format:"%s" $sha 2>&1 | Out-String).Trim()
+    $subject = (git log -1 --pretty=format:"%s" $sha 2>&1) -join ""
     $idx     = $successCount + 1
-    Write-Info "[$idx/$($commitList.Count)] cherry-pick $sha"
+    Write-Info "[$idx/$($commitList.Count)] $sha"
     Write-Host "         $subject" -ForegroundColor DarkGray
 
-    $cpOut = (git cherry-pick $sha 2>&1 | Out-String).Trim()
+    git cherry-pick $sha 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        # 检查是否是冲突（而非其他错误）
-        $conflictFiles = (git diff --name-only --diff-filter=U 2>&1) -join ""
-        if ($conflictFiles -eq "" -and $cpOut -notmatch "conflict") {
-            # 非冲突性错误，中止并退出
-            Write-Fail "cherry-pick 失败（非冲突错误）: $sha"
-            Write-Host $cpOut -ForegroundColor DarkRed
-            git cherry-pick --abort 2>&1 | Out-Null
+
+        # Check whether this is a conflict or some other failure
+        $conflicted = @(git diff --name-only --diff-filter=U 2>&1 |
+                        Where-Object { $_ -match "\S" })
+
+        if ($conflicted.Count -eq 0) {
+            # No conflict files - unrecoverable error
+            $errDetail = (git cherry-pick --abort 2>&1) -join ""
+            Write-Fail "cherry-pick failed (non-conflict error): $sha"
             Set-Content -Path $stateFilePath -Value $lastGoodCommit -NoNewline
-            Write-Info "状态文件已更新至: $lastGoodCommit"
+            Write-Info "State file saved at: $lastGoodCommit"
             exit 1
         }
 
-        # 有冲突：全部采用远程（upstream）版本
-        Write-Warn "    检测到冲突，自动采用远程版本..."
-        Write-Host $cpOut -ForegroundColor DarkYellow
-
-        # checkout --theirs 对所有冲突文件取远程版本
-        $conflicted = git diff --name-only --diff-filter=U 2>&1
+        # Conflict: accept upstream (theirs) for every conflicted file
+        Write-Warn "    Conflict detected - auto-resolving with upstream version (theirs)..."
         foreach ($f in $conflicted) {
-            if ($f -match "\S") {
-                git checkout --theirs -- $f 2>&1 | Out-Null
-                git add -- $f 2>&1 | Out-Null
-                Write-Host "        theirs: $f" -ForegroundColor DarkYellow
-            }
+            git checkout --theirs -- $f 2>&1 | Out-Null
+            git add          -- $f 2>&1 | Out-Null
+            Write-Host "        [theirs] $f" -ForegroundColor DarkYellow
         }
 
-        # 同时处理删除/添加冲突（unmerged but not U-filter）
+        # Stage any remaining unmerged paths (e.g. added/deleted conflicts)
         git add -A 2>&1 | Out-Null
 
-        # 继续 cherry-pick（跳过编辑器提示）
+        # Continue cherry-pick without opening an editor
         $env:GIT_EDITOR = "true"
         git cherry-pick --continue 2>&1 | Out-Null
         $env:GIT_EDITOR = ""
 
         if ($LASTEXITCODE -ne 0) {
-            Write-Fail "cherry-pick --continue 失败: $sha"
+            Write-Fail "cherry-pick --continue failed: $sha"
             git cherry-pick --abort 2>&1 | Out-Null
             Set-Content -Path $stateFilePath -Value $lastGoodCommit -NoNewline
-            Write-Info "状态文件已更新至: $lastGoodCommit"
+            Write-Info "State file saved at: $lastGoodCommit"
             exit 1
         }
-        Write-Warn "    冲突已自动解决（采用远程版本）"
+        Write-Warn "    Conflict auto-resolved (upstream version kept)."
     }
 
     $lastGoodCommit = $sha
     $successCount++
-    Write-Ok "    OK  $sha"
+    Write-Ok "    done  $sha"
 }
 
-# ─── 保存最后 commit ID ───────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Save final state
+# ---------------------------------------------------------------------------
 
 Set-Content -Path $stateFilePath -Value $lastGoodCommit -NoNewline
 
 Write-Ok "========================================================"
-Write-Ok "全部完成！cherry-pick 了 $successCount 个提交。"
-Write-Ok "最后 commit: $lastGoodCommit"
-Write-Ok "状态文件:   $stateFilePath"
+Write-Ok "Finished!  $successCount commit(s) cherry-picked."
+Write-Ok "Last commit : $lastGoodCommit"
+Write-Ok "State file  : $stateFilePath"
 Write-Ok "========================================================"
