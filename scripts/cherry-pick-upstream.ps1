@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     从 upstream 拉取新提交并 cherry-pick 到目标分支。
 
@@ -110,6 +110,27 @@ if ($LASTEXITCODE -ne 0) {
 if ($fetchOut) { Write-Host $fetchOut }
 $upstreamRef = "$UpstreamRemote/$UpstreamBranch"
 Write-Ok "fetch 完成，upstream ref: $upstreamRef"
+
+# ─── 校验起始 commit 必须是 upstream 分支的祖先 ───────────────────────────────
+#
+# 关键约束：$lastCommit 必须是 upstream/main 上的原始提交 SHA。
+# 若传入的是本地 cherry-pick 后产生的新 SHA，git 不认为它是 upstream 的祖先，
+# 导致范围变成 upstream 全量历史（包含几年前的提交）。
+
+git merge-base --is-ancestor $lastCommit $upstreamRef 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Fail "起始 commit [ $lastCommit ] 不是 $upstreamRef 的祖先！"
+    Write-Host ""
+    Write-Host "  常见原因：输入的是本地 cherry-pick 后的 commit SHA，" -ForegroundColor Yellow
+    Write-Host "  而不是 upstream 分支上的原始 commit SHA。" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  解决方法：在 upstream 分支上找到对应的原始 commit SHA：" -ForegroundColor Cyan
+    Write-Host "    git log --oneline $upstreamRef | head -20" -ForegroundColor Cyan
+    Write-Host "  然后用该 SHA 重新运行：" -ForegroundColor Cyan
+    Write-Host "    .\scripts\cherry-pick-upstream.ps1 -StartCommit <upstream-sha>" -ForegroundColor Cyan
+    exit 1
+}
+Write-Ok "起始 commit 是 $upstreamRef 的合法祖先，范围计算正确。"
 
 # ─── 获取待 cherry-pick 的 commit 列表 ───────────────────────────────────────
 
