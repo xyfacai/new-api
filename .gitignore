@@ -29,3 +29,4 @@ data/
 .gomodcache/
 .gocache-temp
 .gopath
+scripts/.cherry-pick-state 
