@@ -166,22 +166,48 @@ foreach ($sha in $commitList) {
 
     $cpOut = (git cherry-pick $sha 2>&1 | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) {
-        Write-Fail "cherry-pick 失败: $sha"
-        Write-Host $cpOut -ForegroundColor DarkRed
-
-        # 中止以恢复干净状态
-        git cherry-pick --abort 2>&1 | Out-Null
-
-        if ($successCount -gt 0) {
-            Write-Warn "已成功处理 $successCount 个提交，在此处遇到冲突。"
-            Write-Warn "上次成功的 commit: $lastGoodCommit"
+        # 检查是否是冲突（而非其他错误）
+        $conflictFiles = (git diff --name-only --diff-filter=U 2>&1) -join ""
+        if ($conflictFiles -eq "" -and $cpOut -notmatch "conflict") {
+            # 非冲突性错误，中止并退出
+            Write-Fail "cherry-pick 失败（非冲突错误）: $sha"
+            Write-Host $cpOut -ForegroundColor DarkRed
+            git cherry-pick --abort 2>&1 | Out-Null
+            Set-Content -Path $stateFilePath -Value $lastGoodCommit -NoNewline
+            Write-Info "状态文件已更新至: $lastGoodCommit"
+            exit 1
         }
 
-        # 保存进度
-        Set-Content -Path $stateFilePath -Value $lastGoodCommit -NoNewline
-        Write-Info "状态文件已更新至: $lastGoodCommit"
-        Write-Warn "请手动解决冲突后重新运行脚本继续。"
-        exit 1
+        # 有冲突：全部采用远程（upstream）版本
+        Write-Warn "    检测到冲突，自动采用远程版本..."
+        Write-Host $cpOut -ForegroundColor DarkYellow
+
+        # checkout --theirs 对所有冲突文件取远程版本
+        $conflicted = git diff --name-only --diff-filter=U 2>&1
+        foreach ($f in $conflicted) {
+            if ($f -match "\S") {
+                git checkout --theirs -- $f 2>&1 | Out-Null
+                git add -- $f 2>&1 | Out-Null
+                Write-Host "        theirs: $f" -ForegroundColor DarkYellow
+            }
+        }
+
+        # 同时处理删除/添加冲突（unmerged but not U-filter）
+        git add -A 2>&1 | Out-Null
+
+        # 继续 cherry-pick（跳过编辑器提示）
+        $env:GIT_EDITOR = "true"
+        git cherry-pick --continue 2>&1 | Out-Null
+        $env:GIT_EDITOR = ""
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Fail "cherry-pick --continue 失败: $sha"
+            git cherry-pick --abort 2>&1 | Out-Null
+            Set-Content -Path $stateFilePath -Value $lastGoodCommit -NoNewline
+            Write-Info "状态文件已更新至: $lastGoodCommit"
+            exit 1
+        }
+        Write-Warn "    冲突已自动解决（采用远程版本）"
     }
 
     $lastGoodCommit = $sha
