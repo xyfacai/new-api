@@ -220,7 +220,19 @@ foreach ($sha in $commitList) {
         # Always show what git said to help diagnose failures
         Write-Host $cpOut -ForegroundColor DarkYellow
 
-        # Detect unmerged paths via git status --porcelain.
+        # Case 1: Empty commit - the changes are already present on the target branch.
+        # git exits non-zero and says "nothing to commit / is now empty".
+        # Correct action: --skip (not --abort, which would lose the cherry-pick state).
+        if ($cpOut -match "nothing to commit" -or $cpOut -match "is now empty") {
+            Write-Warn "    Commit is empty (already applied) - skipping..."
+            git cherry-pick --skip 2>&1 | Out-Null
+            $lastGoodCommit = $sha
+            $successCount++
+            Write-Ok "    skip  $sha"
+            continue
+        }
+
+        # Case 2: Conflict - detect unmerged paths via git status --porcelain.
         # Unmerged status codes: UU AA DD AU UA DU UD
         # This covers all conflict types, including those from -m 1 merge picks.
         $conflicted = @(git status --porcelain 2>&1 |
@@ -228,7 +240,7 @@ foreach ($sha in $commitList) {
                         ForEach-Object { $_.Substring(3) })
 
         if ($conflicted.Count -eq 0) {
-            # No conflict files - unrecoverable error
+            # No conflict files, not empty - truly unrecoverable error
             git cherry-pick --abort 2>&1 | Out-Null
             Write-Fail "cherry-pick failed (non-conflict error): $sha"
             Set-Content -Path $stateFilePath -Value $lastGoodCommit -NoNewline
