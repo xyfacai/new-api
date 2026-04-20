@@ -200,12 +200,21 @@ $successCount   = 0
 $lastGoodCommit = $lastCommit
 
 foreach ($sha in $commitList) {
-    $subject = (git log -1 --pretty=format:"%s" $sha 2>&1) -join ""
-    $idx     = $successCount + 1
-    Write-Info "[$idx/$($commitList.Count)] $sha"
+    $subject    = (git log -1 --pretty=format:"%s" $sha 2>&1) -join ""
+    $parentCount = ((git log -1 --pretty=format:"%P" $sha 2>&1) -join "" -split "\s+" |
+                    Where-Object { $_ -match "\S" }).Count
+    $isMerge    = $parentCount -gt 1
+    $idx        = $successCount + 1
+    Write-Info "[$idx/$($commitList.Count)] $sha$(if ($isMerge) { ' [merge]' })"
     Write-Host "         $subject" -ForegroundColor DarkGray
 
-    git cherry-pick $sha 2>&1 | Out-Null
+    # Merge commits require -m 1 to specify the mainline parent
+    if ($isMerge) {
+        git cherry-pick -m 1 $sha 2>&1 | Out-Null
+    } else {
+        git cherry-pick $sha 2>&1 | Out-Null
+    }
+
     if ($LASTEXITCODE -ne 0) {
 
         # Check whether this is a conflict or some other failure
@@ -214,7 +223,7 @@ foreach ($sha in $commitList) {
 
         if ($conflicted.Count -eq 0) {
             # No conflict files - unrecoverable error
-            $errDetail = (git cherry-pick --abort 2>&1) -join ""
+            git cherry-pick --abort 2>&1 | Out-Null
             Write-Fail "cherry-pick failed (non-conflict error): $sha"
             Set-Content -Path $stateFilePath -Value $lastGoodCommit -NoNewline
             Write-Info "State file saved at: $lastGoodCommit"
