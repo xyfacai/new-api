@@ -267,3 +267,28 @@ func CacheUpdateChannel(channel *Channel) {
 	channelsIDM[channel.Id] = channel
 	logger.LogDebug(nil, "CacheUpdateChannel after: id=%d, name=%s, status=%d, polling_index=%d", channel.Id, channel.Name, channel.Status, channel.ChannelInfo.MultiKeyPollingIndex)
 }
+
+func CacheRemoveModelFromChannel(channelID int, model, group string) {
+	if !common.MemoryCacheEnabled {
+		return
+	}
+	channelSyncLock.Lock()
+	defer channelSyncLock.Unlock()
+	groupModels, ok := group2model2channels[group]
+	if !ok {
+		return
+	}
+	models, ok := groupModels[model]
+	if !ok {
+		return
+	}
+
+	newModels := make([]int, 0)
+	for _, channelId := range models {
+		if channelId == channelID {
+			continue
+		}
+		newModels = append(newModels, channelId)
+	}
+	groupModels[model] = newModels
+}

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,10 +28,13 @@ import (
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/samber/lo"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
+
+var removeModelFromChannelGroup singleflight.Group
 
 func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	var err *types.NewAPIError
@@ -362,6 +366,10 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 			service.DisableChannel(channelError, err.ErrorWithStatusCode())
 		})
 	}
+	//does not have access to model
+	if channelError.ChannelType == constant.ChannelTypeOpenAI && strings.Contains(err.Error(), "does not have access to model") {
+		tryAutoRemoveModelFromChannel(c, channelError.ChannelId)
+	}
 
 	if constant.ErrorLogEnabled && types.IsRecordErrorLog(err) {
 		// 保存错误日志到mysql中
@@ -398,6 +406,25 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), userGroup, other)
 	}
 
+}
+
+func tryAutoRemoveModelFromChannel(c *gin.Context, channelID int) {
+	removeModel := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
+	usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	if removeModel == "" || usingGroup == "" {
+		return
+	}
+	key := strconv.Itoa(channelID) + ":" + usingGroup + ":" + removeModel
+	_, _, _ = removeModelFromChannelGroup.Do(key, func() (interface{}, error) {
+		updateErr := model.RemoveModelFromChannel(channelID, removeModel)
+		if updateErr != nil {
+			logger.LogError(c, fmt.Sprintf("remove model from channel error: %s", updateErr.Error()))
+		} else {
+			model.RecordLog(1, model.LogTypeSystem, fmt.Sprintf("auto remove model[%s] from channel[%d]", removeModel, channelID))
+		}
+		model.CacheRemoveModelFromChannel(channelID, removeModel, usingGroup)
+		return nil, nil
+	})
 }
 
 func RelayMidjourney(c *gin.Context) {

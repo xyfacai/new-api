@@ -1106,3 +1106,30 @@ func CountChannelsGroupByType() (map[int64]int64, error) {
 	}
 	return counts, nil
 }
+
+func RemoveModelFromChannel(channelID int, model string) error {
+	channel := &Channel{}
+	err := DB.Where("id = ?", channelID).First(channel).Error
+	if err != nil {
+		return err
+	}
+	models := channel.GetModels()
+	newModels := make([]string, 0)
+	for _, m := range models {
+		if m == model {
+			continue
+		}
+		newModels = append(newModels, m)
+	}
+	channel.Models = strings.Join(newModels, ",")
+	err = DB.Save(channel).Error
+	if err != nil {
+		return err
+	}
+	err = channel.UpdateAbilities(nil)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("failed to update abilities: channel_id=%d, tag=%s, error=%v", channel.Id, channel.GetTag(), err))
+		return err
+	}
+	return nil
+}
