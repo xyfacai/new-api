@@ -1,5 +1,12 @@
 package dto
 
+import (
+	"strings"
+
+	"github.com/QuantumNous/new-api/common"
+	"github.com/samber/lo"
+)
+
 type ChannelSettings struct {
 	ForceFormat            bool   `json:"force_format,omitempty"`
 	ThinkingToContent      bool   `json:"thinking_to_content,omitempty"`
@@ -7,6 +14,12 @@ type ChannelSettings struct {
 	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
+
+	AutoRemoveNotHaveAccessModel bool     `json:"auto_remove_not_have_access_model,omitempty"` // 自动删除不可访问的模型
+	NotRetryStatusCodes          string   `json:"not_retry_status_codes"`
+	MustRetryStatusCodes         string   `json:"must_retry_status_codes"`
+	NoRetryMessages              []string `json:"no_retry_messages,omitempty"`
+	MustRetryMessages            []string `json:"must_retry_messages,omitempty"`
 }
 
 type VertexKeyType string
@@ -48,4 +61,24 @@ func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
 		return false
 	}
 	return *s.OpenRouterEnterprise
+}
+
+func (channel *ChannelSettings) GetNotRetryStatusCodes() []int {
+	if channel.NotRetryStatusCodes == "" {
+		return []int{}
+	}
+
+	return lo.Map(strings.Split(channel.NotRetryStatusCodes, ","), func(item string, index int) int {
+		return common.AnyToInt(item)
+	})
+}
+
+func (channel *ChannelSettings) GetMustRetryStatusCodes() []int {
+	if channel.MustRetryStatusCodes == "" {
+		return []int{}
+	}
+
+	return lo.Map(strings.Split(channel.MustRetryStatusCodes, ","), func(item string, index int) int {
+		return common.AnyToInt(item)
+	})
 }

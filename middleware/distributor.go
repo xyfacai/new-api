@@ -464,7 +464,12 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, channel.GetBaseURL())
 
 	common.SetContextKey(c, constant.ContextKeySystemPromptOverride, false)
-
+	settings := channel.GetSetting()
+	c.Set("AutoRemoveNotHaveAccessModel", settings.AutoRemoveNotHaveAccessModel)
+	c.Set("not_retry_status_codes", settings.GetNotRetryStatusCodes())
+	c.Set("must_retry_status_codes", settings.GetMustRetryStatusCodes())
+	c.Set("channel_no_retry_messages", settings.NoRetryMessages)
+	c.Set("channel_must_retry_messages", settings.MustRetryMessages)
 	// TODO: api_version统一
 	switch channel.Type {
 	case constant.ChannelTypeAzure:

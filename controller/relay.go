@@ -344,6 +344,40 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if _, ok := c.Get("specific_channel_id"); ok {
 		return false
 	}
+	// 检查客户端是否取消了请求
+	if c.Request.Context().Err() != nil {
+		return false
+	}
+
+	opErrMsg := openaiErr.Error()
+	if opErrMsg != "" {
+		noRetryMessages := c.GetStringSlice("channel_no_retry_messages")
+		if len(noRetryMessages) > 0 {
+			lowerMessage := strings.ToLower(opErrMsg)
+			search, _ := service.AcSearch(lowerMessage, noRetryMessages, true)
+			if search {
+				return false
+			}
+		}
+		mustRetryMessages := c.GetStringSlice("channel_must_retry_messages")
+		if len(mustRetryMessages) > 0 {
+			lowerMessage := strings.ToLower(opErrMsg)
+			search, _ := service.AcSearch(lowerMessage, mustRetryMessages, true)
+			if search {
+				return true
+			}
+		}
+	}
+
+	notRetryStatusCodes := common.GetIntSlice(c, "not_retry_status_codes")
+	if len(notRetryStatusCodes) > 0 && lo.Contains(notRetryStatusCodes, openaiErr.StatusCode) {
+		return false
+	}
+	mustRetryStatusCodes := common.GetIntSlice(c, "must_retry_status_codes")
+	if len(mustRetryStatusCodes) > 0 && lo.Contains(mustRetryStatusCodes, openaiErr.StatusCode) {
+		return true
+	}
+
 	code := openaiErr.StatusCode
 	if code >= 200 && code < 300 {
 		return false
@@ -367,7 +401,7 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		})
 	}
 	//does not have access to model
-	if channelError.ChannelType == constant.ChannelTypeOpenAI && strings.Contains(err.Error(), "does not have access to model") {
+	if channelError.ChannelType == constant.ChannelTypeOpenAI && strings.Contains(err.Error(), "does not have access to model") && c.GetBool("AutoRemoveNotHaveAccessModel") {
 		tryAutoRemoveModelFromChannel(c, channelError.ChannelId)
 	}
 

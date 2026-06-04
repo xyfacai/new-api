@@ -19,8 +19,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 )
 
 func OpenBrowser(url string) {
@@ -333,4 +335,65 @@ func BuildURL(base string, endpoint string) string {
 		return base + endpoint
 	}
 	return u.ResolveReference(ref).String()
+}
+
+func GetIntSlice(c *gin.Context, key string) (ss []int) {
+	if val, ok := c.Get(key); ok && val != nil {
+		ss, ok = val.([]int)
+		if ok {
+			return ss
+		}
+		sstr, ok := val.([]string)
+		if ok {
+			ss = lo.Map(sstr, func(item string, index int) int {
+				return AnyToInt(item)
+			})
+			return ss
+		}
+	}
+	return
+}
+
+func AnyToInt(data any) int {
+	switch v := data.(type) {
+	case nil:
+		return 0
+	case float64:
+		return int(v)
+	case int64:
+		return int(v)
+	case int:
+		return v
+	case *int:
+		return *v
+	case string:
+		return int(AnyToInt64(v))
+	default:
+		return 0
+	}
+}
+
+func AnyToInt64(data any) int64 {
+	switch v := data.(type) {
+	case nil:
+		return 0
+	case float64:
+		return int64(v)
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case *int:
+		return int64(*v)
+	case string:
+		// 先尝试解析为浮点数，支持 "123.000000" 这样的格式
+		if valueAssertFloat, err := strconv.ParseFloat(v, 64); err == nil {
+			return int64(valueAssertFloat)
+		}
+		// 如果解析浮点数失败，再尝试直接解析为整数
+		valueAssertInt, _ := strconv.ParseInt(v, 10, 64)
+		return valueAssertInt
+	default:
+		return 0
+	}
 }
