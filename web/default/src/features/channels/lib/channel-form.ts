@@ -100,6 +100,31 @@ function parseCommaSeparatedList(value: string | undefined): string[] {
     .filter(Boolean)
 }
 
+function formatStringArray(value: unknown): string {
+  return Array.isArray(value) ? JSON.stringify(value, null, 2) : ''
+}
+
+function parseOptionalStringArray(value: string | undefined): string[] {
+  if (!value?.trim()) return []
+  const parsed = JSON.parse(value)
+  if (!Array.isArray(parsed)) {
+    throw new Error('Expected a JSON array')
+  }
+  if (!parsed.every((item) => typeof item === 'string')) {
+    throw new Error('Expected a JSON string array')
+  }
+  return parsed
+}
+
+function isOptionalStringArray(value: string | undefined): boolean {
+  try {
+    parseOptionalStringArray(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function isCodexCredential(value: string | undefined): boolean {
   try {
     const parsed = parseOptionalJson(value)
@@ -218,8 +243,14 @@ export const channelFormSchema = z
         isOptionalStatusCodeList,
         'Status codes must be comma-separated HTTP status codes'
       ),
-    no_retry_messages: z.string().optional(),
-    must_retry_messages: z.string().optional(),
+    no_retry_messages: z
+      .string()
+      .optional()
+      .refine(isOptionalStringArray, 'Expected a JSON array.'),
+    must_retry_messages: z
+      .string()
+      .optional()
+      .refine(isOptionalStringArray, 'Expected a JSON array.'),
     // Type-specific settings (stored in settings JSON)
     is_enterprise_account: z.boolean().optional(), // OpenRouter specific
     vertex_key_type: z.enum(['json', 'api_key']).optional(), // Vertex AI specific
@@ -400,12 +431,8 @@ export function transformChannelToFormDefaults(
           parsed.auto_remove_not_have_access_model || false,
         not_retry_status_codes: parsed.not_retry_status_codes || '',
         must_retry_status_codes: parsed.must_retry_status_codes || '',
-        no_retry_messages: Array.isArray(parsed.no_retry_messages)
-          ? parsed.no_retry_messages.join(',')
-          : '',
-        must_retry_messages: Array.isArray(parsed.must_retry_messages)
-          ? parsed.must_retry_messages.join(',')
-          : '',
+        no_retry_messages: formatStringArray(parsed.no_retry_messages),
+        must_retry_messages: formatStringArray(parsed.must_retry_messages),
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -523,8 +550,8 @@ function buildSettingJSON(formData: ChannelFormValues): string {
     must_retry_status_codes: parseCommaSeparatedList(
       formData.must_retry_status_codes
     ).join(','),
-    no_retry_messages: parseCommaSeparatedList(formData.no_retry_messages),
-    must_retry_messages: parseCommaSeparatedList(formData.must_retry_messages),
+    no_retry_messages: parseOptionalStringArray(formData.no_retry_messages),
+    must_retry_messages: parseOptionalStringArray(formData.must_retry_messages),
   }
   return JSON.stringify(settingObj)
 }

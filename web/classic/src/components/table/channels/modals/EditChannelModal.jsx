@@ -890,12 +890,12 @@ const EditChannelModal = (props) => {
           data.no_retry_messages = Array.isArray(
             parsedSettings.no_retry_messages,
           )
-            ? parsedSettings.no_retry_messages.join(',')
+            ? JSON.stringify(parsedSettings.no_retry_messages, null, 2)
             : '';
           data.must_retry_messages = Array.isArray(
             parsedSettings.must_retry_messages,
           )
-            ? parsedSettings.must_retry_messages.join(',')
+            ? JSON.stringify(parsedSettings.must_retry_messages, null, 2)
             : '';
         } catch (error) {
           console.error('解析渠道设置失败:', error);
@@ -1730,6 +1730,38 @@ const EditChannelModal = (props) => {
         return;
       }
     }
+    const parseMessageArray = (value, label) => {
+      if (!value || value.trim() === '') {
+        return [];
+      }
+      try {
+        const parsed = JSON.parse(value);
+        if (
+          Array.isArray(parsed) &&
+          parsed.every((item) => typeof item === 'string')
+        ) {
+          return parsed;
+        }
+      } catch (error) {
+        // fall through to unified validation message
+      }
+      showInfo(`${label}${t('必须是 JSON 数组')}`);
+      return null;
+    };
+    const noRetryMessages = parseMessageArray(
+      localInputs.no_retry_messages,
+      t('不重试消息'),
+    );
+    if (noRetryMessages === null) {
+      return;
+    }
+    const mustRetryMessages = parseMessageArray(
+      localInputs.must_retry_messages,
+      t('强制重试消息'),
+    );
+    if (mustRetryMessages === null) {
+      return;
+    }
 
     const normalizedModels = (localInputs.models || [])
       .map((model) => (model || '').trim())
@@ -1816,16 +1848,8 @@ const EditChannelModal = (props) => {
         .map((item) => item.trim())
         .filter(Boolean)
         .join(','),
-      no_retry_messages: String(localInputs.no_retry_messages || '')
-        .replace(/[，]/g, ',')
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean),
-      must_retry_messages: String(localInputs.must_retry_messages || '')
-        .replace(/[，]/g, ',')
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean),
+      no_retry_messages: noRetryMessages,
+      must_retry_messages: mustRetryMessages,
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -2615,10 +2639,10 @@ const EditChannelModal = (props) => {
 
                   <Row gutter={16}>
                     <Col span={12}>
-                      <Form.Input field='no_retry_messages' label={t('不重试消息')} placeholder={t('例如: insufficient_quota,invalid_api_key')} onChange={(value) => handleChannelSettingsChange('no_retry_messages', value)} showClear extraText={t('逗号分隔，错误消息包含这些片段时不重试')} />
+                      <Form.TextArea field='no_retry_messages' label={t('不重试消息')} placeholder='["insufficient_quota", "invalid_api_key"]' onChange={(value) => handleChannelSettingsChange('no_retry_messages', value)} autosize showClear extraText={t('JSON 数组，错误消息包含这些片段时不重试')} />
                     </Col>
                     <Col span={12}>
-                      <Form.Input field='must_retry_messages' label={t('强制重试消息')} placeholder={t('例如: rate_limit,timeout')} onChange={(value) => handleChannelSettingsChange('must_retry_messages', value)} showClear extraText={t('逗号分隔，错误消息包含这些片段时强制重试')} />
+                      <Form.TextArea field='must_retry_messages' label={t('强制重试消息')} placeholder='["rate_limit", "timeout"]' onChange={(value) => handleChannelSettingsChange('must_retry_messages', value)} autosize showClear extraText={t('JSON 数组，错误消息包含这些片段时强制重试')} />
                     </Col>
                   </Row>
 

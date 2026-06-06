@@ -2099,6 +2099,8 @@
     "Jina": "Jina",
     "JSON": "JSON",
     "JSON array of group identifiers. When enabled below, new tokens rotate through this list.": "JSON array of group identifiers. When enabled below, new tokens rotate through this list.",
+    "JSON array of message snippets that must retry": "JSON array of message snippets that must retry",
+    "JSON array of message snippets that should not retry": "JSON array of message snippets that should not retry",
     "JSON Editor": "JSON Editor",
     "JSON format error": "JSON format error",
     "JSON format supports service account JSON files": "JSON format supports service account JSON files",

@@ -3279,16 +3279,15 @@ export function ChannelMutateDrawer({
                             <FormItem>
                               <FormLabel>{t('No-retry Messages')}</FormLabel>
                               <FormControl>
-                                <Input
-                                  placeholder={t(
-                                    'e.g. insufficient_quota,invalid_api_key'
-                                  )}
+                                <Textarea
+                                  placeholder='["insufficient_quota", "invalid_api_key"]'
+                                  rows={3}
                                   {...field}
                                 />
                               </FormControl>
                               <FormDescription>
                                 {t(
-                                  'Comma-separated message snippets that should not retry'
+                                  'JSON array of message snippets that should not retry'
                                 )}
                               </FormDescription>
                               <FormMessage />
@@ -3303,14 +3302,15 @@ export function ChannelMutateDrawer({
                             <FormItem>
                               <FormLabel>{t('Must-retry Messages')}</FormLabel>
                               <FormControl>
-                                <Input
-                                  placeholder={t('e.g. rate_limit,timeout')}
+                                <Textarea
+                                  placeholder='["rate_limit", "timeout"]'
+                                  rows={3}
                                   {...field}
                                 />
                               </FormControl>
                               <FormDescription>
                                 {t(
-                                  'Comma-separated message snippets that must retry'
+                                  'JSON array of message snippets that must retry'
                                 )}
                               </FormDescription>
                               <FormMessage />

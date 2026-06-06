@@ -2099,6 +2099,8 @@
     "Jina": "Jina",
     "JSON": "JSON",
     "JSON array of group identifiers. When enabled below, new tokens rotate through this list.": "Массив JSON идентификаторов групп. Если включено ниже, новые токены будут циклически перебираться по этому списку.",
+    "JSON array of message snippets that must retry": "JSON-массив фрагментов сообщений, для которых нужно повторять запрос",
+    "JSON array of message snippets that should not retry": "JSON-массив фрагментов сообщений, для которых не нужно повторять запрос",
     "JSON Editor": "Редактирование JSON",
     "JSON format error": "Ошибка формата JSON",
     "JSON format supports service account JSON files": "Формат JSON поддерживает JSON-файлы сервисного аккаунта",

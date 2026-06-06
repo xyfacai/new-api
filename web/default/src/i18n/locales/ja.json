@@ -2099,6 +2099,8 @@
     "Jina": "Jina",
     "JSON": "JSON",
     "JSON array of group identifiers. When enabled below, new tokens rotate through this list.": "グループ識別子のJSON配列。以下で有効にすると、新しいトークンはこのリストをローテーションします。",
+    "JSON array of message snippets that must retry": "必ずリトライするメッセージ断片の JSON 配列",
+    "JSON array of message snippets that should not retry": "リトライしないメッセージ断片の JSON 配列",
     "JSON Editor": "JSON編集",
     "JSON format error": "JSONフォーマットエラー",
     "JSON format supports service account JSON files": "JSON形式はサービスアカウントJSONファイルをサポートします",

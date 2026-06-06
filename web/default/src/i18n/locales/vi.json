@@ -2099,6 +2099,8 @@
     "Jina": "Jina",
     "JSON": "JSON",
     "JSON array of group identifiers. When enabled below, new tokens rotate through this list.": "Mảng JSON của các định danh nhóm. Khi được bật bên dưới, các token mới sẽ luân phiên qua danh sách này.",
+    "JSON array of message snippets that must retry": "Mang JSON gom cac doan thong bao bat buoc thu lai",
+    "JSON array of message snippets that should not retry": "Mang JSON gom cac doan thong bao khong thu lai",
     "JSON Editor": "Trình chỉnh sửa JSON",
     "JSON format error": "Lỗi định dạng JSON",
     "JSON format supports service account JSON files": "Định dạng JSON hỗ trợ các tệp JSON tài khoản dịch vụ",

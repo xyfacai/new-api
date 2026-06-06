@@ -2099,6 +2099,8 @@
     "Jina": "Jina",
     "JSON": "JSON",
     "JSON array of group identifiers. When enabled below, new tokens rotate through this list.": "Tableau JSON d'identifiants de groupe. Lorsqu'il est activé ci-dessous, les nouveaux jetons alternent dans cette liste.",
+    "JSON array of message snippets that must retry": "Tableau JSON de fragments de message qui doivent etre retentes",
+    "JSON array of message snippets that should not retry": "Tableau JSON de fragments de message qui ne doivent pas etre retentes",
     "JSON Editor": "Édition JSON",
     "JSON format error": "Erreur de format JSON",
     "JSON format supports service account JSON files": "Le format JSON prend en charge les fichiers JSON de compte de service",

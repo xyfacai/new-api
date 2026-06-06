@@ -2099,6 +2099,8 @@
     "Jina": "Jina",
     "JSON": "JSON",
     "JSON array of group identifiers. When enabled below, new tokens rotate through this list.": "分组标识符的 JSON 数组。在下方启用时，新令牌将在此列表中轮换。",
+    "JSON array of message snippets that must retry": "JSON 数组，错误消息包含这些片段时强制重试",
+    "JSON array of message snippets that should not retry": "JSON 数组，错误消息包含这些片段时不重试",
     "JSON Editor": "JSON 编辑",
     "JSON format error": "JSON 格式错误",
     "JSON format supports service account JSON files": "JSON 格式支持服务账户 JSON 文件",
