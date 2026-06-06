@@ -79,6 +79,27 @@ function isOptionalStatusCodeMapping(value: string | undefined): boolean {
   }
 }
 
+function isOptionalStatusCodeList(value: string | undefined): boolean {
+  if (!value?.trim()) return true
+  return value
+    .replace(/[，]/g, ',')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .every((item) => {
+      const code = Number(item)
+      return Number.isInteger(code) && code >= 100 && code <= 599
+    })
+}
+
+function parseCommaSeparatedList(value: string | undefined): string[] {
+  return String(value || '')
+    .replace(/[，]/g, ',')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 function isCodexCredential(value: string | undefined): boolean {
   try {
     const parsed = parseOptionalJson(value)
@@ -182,6 +203,23 @@ export const channelFormSchema = z
     pass_through_body_enabled: z.boolean().optional(),
     system_prompt: z.string().optional(),
     system_prompt_override: z.boolean().optional(),
+    auto_remove_not_have_access_model: z.boolean().optional(),
+    not_retry_status_codes: z
+      .string()
+      .optional()
+      .refine(
+        isOptionalStatusCodeList,
+        'Status codes must be comma-separated HTTP status codes'
+      ),
+    must_retry_status_codes: z
+      .string()
+      .optional()
+      .refine(
+        isOptionalStatusCodeList,
+        'Status codes must be comma-separated HTTP status codes'
+      ),
+    no_retry_messages: z.string().optional(),
+    must_retry_messages: z.string().optional(),
     // Type-specific settings (stored in settings JSON)
     is_enterprise_account: z.boolean().optional(), // OpenRouter specific
     vertex_key_type: z.enum(['json', 'api_key']).optional(), // Vertex AI specific
@@ -300,6 +338,11 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   pass_through_body_enabled: false,
   system_prompt: '',
   system_prompt_override: false,
+  auto_remove_not_have_access_model: false,
+  not_retry_status_codes: '',
+  must_retry_status_codes: '',
+  no_retry_messages: '',
+  must_retry_messages: '',
   // Type-specific settings
   is_enterprise_account: false,
   vertex_key_type: 'json',
@@ -336,6 +379,11 @@ export function transformChannelToFormDefaults(
     pass_through_body_enabled: false,
     system_prompt: '',
     system_prompt_override: false,
+    auto_remove_not_have_access_model: false,
+    not_retry_status_codes: '',
+    must_retry_status_codes: '',
+    no_retry_messages: '',
+    must_retry_messages: '',
   }
 
   if (channel.setting) {
@@ -348,6 +396,16 @@ export function transformChannelToFormDefaults(
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
+        auto_remove_not_have_access_model:
+          parsed.auto_remove_not_have_access_model || false,
+        not_retry_status_codes: parsed.not_retry_status_codes || '',
+        must_retry_status_codes: parsed.must_retry_status_codes || '',
+        no_retry_messages: Array.isArray(parsed.no_retry_messages)
+          ? parsed.no_retry_messages.join(',')
+          : '',
+        must_retry_messages: Array.isArray(parsed.must_retry_messages)
+          ? parsed.must_retry_messages.join(',')
+          : '',
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -457,6 +515,16 @@ function buildSettingJSON(formData: ChannelFormValues): string {
     pass_through_body_enabled: formData.pass_through_body_enabled || false,
     system_prompt: formData.system_prompt || '',
     system_prompt_override: formData.system_prompt_override || false,
+    auto_remove_not_have_access_model:
+      formData.auto_remove_not_have_access_model || false,
+    not_retry_status_codes: parseCommaSeparatedList(
+      formData.not_retry_status_codes
+    ).join(','),
+    must_retry_status_codes: parseCommaSeparatedList(
+      formData.must_retry_status_codes
+    ).join(','),
+    no_retry_messages: parseCommaSeparatedList(formData.no_retry_messages),
+    must_retry_messages: parseCommaSeparatedList(formData.must_retry_messages),
   }
   return JSON.stringify(settingObj)
 }

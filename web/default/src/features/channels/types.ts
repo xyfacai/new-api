@@ -86,6 +86,11 @@ export interface ChannelSettings {
   pass_through_body_enabled?: boolean
   system_prompt?: string
   system_prompt_override?: boolean
+  auto_remove_not_have_access_model?: boolean
+  not_retry_status_codes?: string
+  must_retry_status_codes?: string
+  no_retry_messages?: string[]
+  must_retry_messages?: string[]
 }
 
 export interface ChannelOtherSettings {

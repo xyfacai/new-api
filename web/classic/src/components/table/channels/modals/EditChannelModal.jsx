@@ -195,6 +195,11 @@ const EditChannelModal = (props) => {
     pass_through_body_enabled: false,
     system_prompt: '',
     system_prompt_override: false,
+    auto_remove_not_have_access_model: false,
+    not_retry_status_codes: '',
+    must_retry_status_codes: '',
+    no_retry_messages: '',
+    must_retry_messages: '',
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -517,6 +522,12 @@ const EditChannelModal = (props) => {
     proxy: '',
     pass_through_body_enabled: false,
     system_prompt: '',
+    system_prompt_override: false,
+    auto_remove_not_have_access_model: false,
+    not_retry_status_codes: '',
+    must_retry_status_codes: '',
+    no_retry_messages: '',
+    must_retry_messages: '',
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
   const getInitValues = () => ({ ...originInputs });
@@ -870,6 +881,22 @@ const EditChannelModal = (props) => {
           data.system_prompt = parsedSettings.system_prompt || '';
           data.system_prompt_override =
             parsedSettings.system_prompt_override || false;
+          data.auto_remove_not_have_access_model =
+            parsedSettings.auto_remove_not_have_access_model || false;
+          data.not_retry_status_codes =
+            parsedSettings.not_retry_status_codes || '';
+          data.must_retry_status_codes =
+            parsedSettings.must_retry_status_codes || '';
+          data.no_retry_messages = Array.isArray(
+            parsedSettings.no_retry_messages,
+          )
+            ? parsedSettings.no_retry_messages.join(',')
+            : '';
+          data.must_retry_messages = Array.isArray(
+            parsedSettings.must_retry_messages,
+          )
+            ? parsedSettings.must_retry_messages.join(',')
+            : '';
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -878,6 +905,11 @@ const EditChannelModal = (props) => {
           data.pass_through_body_enabled = false;
           data.system_prompt = '';
           data.system_prompt_override = false;
+          data.auto_remove_not_have_access_model = false;
+          data.not_retry_status_codes = '';
+          data.must_retry_status_codes = '';
+          data.no_retry_messages = '';
+          data.must_retry_messages = '';
         }
       } else {
         data.force_format = false;
@@ -886,6 +918,11 @@ const EditChannelModal = (props) => {
         data.pass_through_body_enabled = false;
         data.system_prompt = '';
         data.system_prompt_override = false;
+        data.auto_remove_not_have_access_model = false;
+        data.not_retry_status_codes = '';
+        data.must_retry_status_codes = '';
+        data.no_retry_messages = '';
+        data.must_retry_messages = '';
       }
 
       if (data.settings) {
@@ -995,6 +1032,12 @@ const EditChannelModal = (props) => {
         pass_through_body_enabled: data.pass_through_body_enabled,
         system_prompt: data.system_prompt,
         system_prompt_override: data.system_prompt_override || false,
+        auto_remove_not_have_access_model:
+          data.auto_remove_not_have_access_model || false,
+        not_retry_status_codes: data.not_retry_status_codes || '',
+        must_retry_status_codes: data.must_retry_status_codes || '',
+        no_retry_messages: data.no_retry_messages || '',
+        must_retry_messages: data.must_retry_messages || '',
       });
       initialModelsRef.current = (data.models || [])
         .map((model) => (model || '').trim())
@@ -1384,6 +1427,11 @@ const EditChannelModal = (props) => {
       pass_through_body_enabled: false,
       system_prompt: '',
       system_prompt_override: false,
+      auto_remove_not_have_access_model: false,
+      not_retry_status_codes: '',
+      must_retry_status_codes: '',
+      no_retry_messages: '',
+      must_retry_messages: '',
     });
     // 重置密钥模式状态
     setKeyMode('append');
@@ -1754,6 +1802,30 @@ const EditChannelModal = (props) => {
       pass_through_body_enabled: localInputs.pass_through_body_enabled || false,
       system_prompt: localInputs.system_prompt || '',
       system_prompt_override: localInputs.system_prompt_override || false,
+      auto_remove_not_have_access_model:
+        localInputs.auto_remove_not_have_access_model || false,
+      not_retry_status_codes: String(localInputs.not_retry_status_codes || '')
+        .replace(/[，]/g, ',')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .join(','),
+      must_retry_status_codes: String(localInputs.must_retry_status_codes || '')
+        .replace(/[，]/g, ',')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .join(','),
+      no_retry_messages: String(localInputs.no_retry_messages || '')
+        .replace(/[，]/g, ',')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+      must_retry_messages: String(localInputs.must_retry_messages || '')
+        .replace(/[，]/g, ',')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -1835,6 +1907,11 @@ const EditChannelModal = (props) => {
     delete localInputs.pass_through_body_enabled;
     delete localInputs.system_prompt;
     delete localInputs.system_prompt_override;
+    delete localInputs.auto_remove_not_have_access_model;
+    delete localInputs.not_retry_status_codes;
+    delete localInputs.must_retry_status_codes;
+    delete localInputs.no_retry_messages;
+    delete localInputs.must_retry_messages;
     delete localInputs.is_enterprise_account;
     // 顶层的 vertex_key_type 不应发送给后端
     delete localInputs.vertex_key_type;
@@ -2525,6 +2602,25 @@ const EditChannelModal = (props) => {
 
                   <Form.Switch field='thinking_to_content' label={t('思考内容转换')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('thinking_to_content', value)} extraText={t('将 reasoning_content 转换为 <think> 标签拼接到内容中')} />
                   <Form.Switch field='pass_through_body_enabled' label={t('透传请求体')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('pass_through_body_enabled', value)} extraText={t('启用请求体透传功能')} />
+                  <Form.Switch field='auto_remove_not_have_access_model' label={t('自动删除不可访问模型')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('auto_remove_not_have_access_model', value)} extraText={t('上游返回模型不可访问时，自动从该渠道模型列表中移除')} />
+
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Input field='not_retry_status_codes' label={t('不重试状态码')} placeholder={t('例如: 400,404,429')} onChange={(value) => handleChannelSettingsChange('not_retry_status_codes', value)} showClear extraText={t('逗号分隔，该渠道遇到这些 HTTP 状态码时不重试')} />
+                    </Col>
+                    <Col span={12}>
+                      <Form.Input field='must_retry_status_codes' label={t('强制重试状态码')} placeholder={t('例如: 500,502,503')} onChange={(value) => handleChannelSettingsChange('must_retry_status_codes', value)} showClear extraText={t('逗号分隔，该渠道遇到这些 HTTP 状态码时强制重试')} />
+                    </Col>
+                  </Row>
+
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Input field='no_retry_messages' label={t('不重试消息')} placeholder={t('例如: insufficient_quota,invalid_api_key')} onChange={(value) => handleChannelSettingsChange('no_retry_messages', value)} showClear extraText={t('逗号分隔，错误消息包含这些片段时不重试')} />
+                    </Col>
+                    <Col span={12}>
+                      <Form.Input field='must_retry_messages' label={t('强制重试消息')} placeholder={t('例如: rate_limit,timeout')} onChange={(value) => handleChannelSettingsChange('must_retry_messages', value)} showClear extraText={t('逗号分隔，错误消息包含这些片段时强制重试')} />
+                    </Col>
+                  </Row>
 
                   <Form.Input field='proxy' label={t('代理地址')} placeholder={t('例如: socks5://user:pass@host:port')} onChange={(value) => handleChannelSettingsChange('proxy', value)} showClear extraText={t('用于配置网络代理，支持 socks5 协议')} />
 

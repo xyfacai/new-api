@@ -218,6 +218,11 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     values.thinking_to_content ||
     values.pass_through_body_enabled ||
     values.system_prompt_override ||
+    values.auto_remove_not_have_access_model ||
+    values.not_retry_status_codes?.trim() ||
+    values.must_retry_status_codes?.trim() ||
+    values.no_retry_messages?.trim() ||
+    values.must_retry_messages?.trim() ||
     values.claude_beta_query ||
     values.upstream_model_update_check_enabled ||
     values.upstream_model_update_auto_sync_enabled ||
@@ -3186,6 +3191,129 @@ export function ChannelMutateDrawer({
                                   onCheckedChange={field.onChange}
                                 />
                               </FormControl>
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name='auto_remove_not_have_access_model'
+                          render={({ field }) => (
+                            <FormItem className='flex items-center justify-between px-4 py-3'>
+                              <div className='space-y-0.5'>
+                                <FormLabel>
+                                  {t('Auto Remove Inaccessible Models')}
+                                </FormLabel>
+                                <FormDescription>
+                                  {t(
+                                    'Remove models reported by upstream as inaccessible from this channel'
+                                  )}
+                                </FormDescription>
+                              </div>
+                              <FormControl>
+                                <Switch
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className='grid gap-4 sm:grid-cols-2'>
+                        <FormField
+                          control={form.control}
+                          name='not_retry_status_codes'
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {t('No-retry Status Codes')}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder={t('e.g. 400, 404, 429')}
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                {t(
+                                  'Comma-separated HTTP status codes that should not retry for this channel'
+                                )}
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name='must_retry_status_codes'
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {t('Must-retry Status Codes')}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder={t('e.g. 500, 502, 503')}
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                {t(
+                                  'Comma-separated HTTP status codes that must retry for this channel'
+                                )}
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className='grid gap-4 sm:grid-cols-2'>
+                        <FormField
+                          control={form.control}
+                          name='no_retry_messages'
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('No-retry Messages')}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder={t(
+                                    'e.g. insufficient_quota,invalid_api_key'
+                                  )}
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                {t(
+                                  'Comma-separated message snippets that should not retry'
+                                )}
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name='must_retry_messages'
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('Must-retry Messages')}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder={t('e.g. rate_limit,timeout')}
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                {t(
+                                  'Comma-separated message snippets that must retry'
+                                )}
+                              </FormDescription>
+                              <FormMessage />
                             </FormItem>
                           )}
                         />
