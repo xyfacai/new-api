@@ -4,12 +4,6 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-)
-
-import (
-	"fmt"
-	"net/url"
-	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/samber/lo"
