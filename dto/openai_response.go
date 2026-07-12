@@ -255,7 +255,6 @@ type OpenAIVideoResponse struct {
 
 type InputTokenDetails struct {
 	CachedTokens         int `json:"cached_tokens"`
-	CacheWriteTokens     int `json:"cache_write_tokens"`
 	CachedCreationTokens int `json:"cached_creation_tokens,omitempty"`
 	// CacheWriteTokens is OpenAI's native cache-write count, reported as
 	// prompt_tokens_details.cache_write_tokens (Chat Completions) or
